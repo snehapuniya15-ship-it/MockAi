@@ -19,7 +19,7 @@ const monoFont = JetBrains_Mono({
 });
 
 export const metadata = {
-  title: "Mock.AI — Live Interview Console",
+  title: "Mock.AI",
   description:
     "A real-time voice interview simulator. Pick a role, talk it through with an AI interviewer, and get an instant performance readout.",
 };
