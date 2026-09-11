@@ -63,14 +63,13 @@ export async function POST(req) {
       });
     }
 
-    // Construct API Payload with updated active model
+    // Using active model confirmed by your Groq account
     const requestPayload = {
-      model: 'llama-3.1-8b-instant', 
+      model: 'openai/gpt-oss-120b', 
       messages: formattedContents,
       temperature: isFinalQuery ? 0.2 : 0.7
     };
 
-    // Request native JSON mode from Groq on final query
     if (isFinalQuery) {
       requestPayload.response_format = { type: "json_object" };
     }
@@ -79,7 +78,7 @@ export async function POST(req) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        'Authorization': `Bearer ${apiKey.trim()}`
       },
       body: JSON.stringify(requestPayload)
     });
@@ -102,7 +101,7 @@ export async function POST(req) {
 
     console.log("=== SENDING TO FRONTEND ===", aiTextResponse);
 
-    // Strip markdown code fences if wrapped in ```json ... ```
+    // Clean any markdown formatting if present
     const cleanJsonString = aiTextResponse
       .replace(/^```json\s*/i, '')
       .replace(/^```\s*/i, '')
@@ -118,7 +117,7 @@ export async function POST(req) {
         return NextResponse.json(parsed);
       }
     } catch {
-      // Fallback response for normal chat outputs
+      // Fallback for regular conversation text
     }
 
     return NextResponse.json({ 
