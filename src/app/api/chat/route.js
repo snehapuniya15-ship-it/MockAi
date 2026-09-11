@@ -50,7 +50,7 @@ export async function POST(req) {
 
     if (Array.isArray(rawMessages) && rawMessages.length > 0) {
       const mappedHistory = rawMessages.map(msg => ({
-        role: msg.role === 'ai' || msg.role === 'model' ? 'assistant' : 'user',
+        role: msg.role === 'ai' || msg.role === 'model' || msg.role === 'interviewer' ? 'assistant' : 'user',
         content: msg.content || msg.text || ""
       }));
       formattedContents.push(...mappedHistory);
@@ -63,24 +63,32 @@ export async function POST(req) {
       });
     }
 
+    // Construct API Payload with updated active model
+    const requestPayload = {
+      model: 'llama-3.1-8b-instant', 
+      messages: formattedContents,
+      temperature: isFinalQuery ? 0.2 : 0.7
+    };
+
+    // Request native JSON mode from Groq on final query
+    if (isFinalQuery) {
+      requestPayload.response_format = { type: "json_object" };
+    }
+
     const apiResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`
       },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile', 
-        messages: formattedContents,
-        temperature: isFinalQuery ? 0.2 : 0.7 
-      })
+      body: JSON.stringify(requestPayload)
     });
 
     if (!apiResponse.ok) {
       const errorText = await apiResponse.text();
       console.error("Groq API Target Error:", errorText);
       return NextResponse.json(
-        { error: `Groq API rejected request: ${apiResponse.statusText}` },
+        { error: `Groq API rejected request: ${apiResponse.statusText}`, details: errorText },
         { status: apiResponse.status }
       );
     }
@@ -94,21 +102,32 @@ export async function POST(req) {
 
     console.log("=== SENDING TO FRONTEND ===", aiTextResponse);
 
+    // Strip markdown code fences if wrapped in ```json ... ```
+    const cleanJsonString = aiTextResponse
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/```\s*$/i, '')
+      .trim();
+
     try {
-      const parsed = JSON.parse(aiTextResponse);
-      if (parsed && !parsed.aiReply) {
-        parsed.aiReply = parsed.text || parsed.message || parsed.content || aiTextResponse;
+      const parsed = JSON.parse(cleanJsonString);
+      if (parsed && typeof parsed === 'object') {
+        if (!parsed.aiReply) {
+          parsed.aiReply = parsed.text || parsed.message || parsed.content || cleanJsonString;
+        }
+        return NextResponse.json(parsed);
       }
-      return NextResponse.json(parsed);
     } catch {
-      return NextResponse.json({ 
-        aiReply: aiTextResponse,
-        response: aiTextResponse,
-        text: aiTextResponse,
-        message: aiTextResponse,
-        content: aiTextResponse
-      });
+      // Fallback response for normal chat outputs
     }
+
+    return NextResponse.json({ 
+      aiReply: aiTextResponse,
+      response: aiTextResponse,
+      text: aiTextResponse,
+      message: aiTextResponse,
+      content: aiTextResponse
+    });
 
   } catch (error) {
     console.error("Groq Route Handler Exception:", error);
